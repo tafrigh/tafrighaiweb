@@ -1,0 +1,30 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+}
+
+body {
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    font-family: "Open Sans Variable", sans-serif;
+    font-size: 1rem;
+    background-color: var(--md-sys-color-background);
+    color: var(--md-sys-color-on-background);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    padding: 1em;
+    position: relative;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    gap: 1em;
+}
+
+.col{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}

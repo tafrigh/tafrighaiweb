@@ -9,6 +9,11 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^5.5.2"
+    "@astrojs/netlify": "^6.2.3",
+    "@fontsource-variable/open-sans": "^5.2.5",
+    "@gradio/client": "^1.13.1",
+    "astro": "^5.5.2",
+    "astro-icon": "^1.1.5",
+    "material": "github:treeder/material"
   }
 }

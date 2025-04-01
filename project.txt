@@ -1,0 +1,199 @@
+---
+
+`src\components\AudioTranscriber.astro`:
+```
+---
+
+---
+
+<div>
+  <input type="file" id="audio-input" accept="audio/*" />
+  <button id="transcribe-button">Transcribe</button>
+  <div id="transcription-output"></div>
+</div>
+
+<script>
+  const audioInput = document.getElementById("audio-input") as HTMLInputElement;
+  const transcribeButton = document.getElementById(
+    "transcribe-button",
+  ) as HTMLButtonElement;
+  const transcriptionOutput = document.getElementById(
+    "transcription-output",
+  ) as HTMLDivElement;
+
+  transcribeButton.addEventListener("click", async () => {
+    if (!audioInput.files || audioInput.files.length === 0) {
+      transcriptionOutput.textContent = "Please select an audio file.";
+      return;
+    }
+
+    const audioFile = audioInput.files[0];
+    transcriptionOutput.textContent = "Transcribing...";
+
+    const formData = new FormData();
+    formData.append("audio", audioFile);
+
+    try {
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.transcription) {
+          transcriptionOutput.textContent = `Transcription: ${data.transcription}`;
+        } else {
+          transcriptionOutput.textContent = `Error: ${data.error || "Unknown error"}`;
+        }
+      } else {
+        transcriptionOutput.textContent = `Error: ${response.status} - ${response.statusText}`;
+      }
+    } catch (error) {
+      console.error("Error during transcription:", error);
+      transcriptionOutput.textContent = `Error: ${error}`;
+    }
+  });
+</script>
+
+```
+
+---
+
+`src\pages\index.astro`:
+```
+---
+import AudioTranscriber from '../components/AudioTranscriber.astro';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout>
+  <AudioTranscriber />
+</Layout>
+```
+
+---
+
+`.env`:
+```
+e
+```
+
+---
+
+`astro.config.mjs`:
+```
+// @ts-check
+import { defineConfig } from 'astro/config';
+
+import netlify from '@astrojs/netlify';
+
+// https://astro.build/config
+export default defineConfig({
+  output: 'server',
+  adapter: netlify()
+});
+```
+
+---
+
+`src\layouts\Layout.astro`:
+```
+<!doctype html>
+<html lang="en">
+        <head>
+                <meta charset="UTF-8" />
+                <meta name="viewport" content="width=device-width" />
+                <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+                <meta name="generator" content={Astro.generator} />
+                <title>Astro Basics</title>
+        </head>
+        <body>
+                <slot />
+        </body>
+</html>
+
+<style>
+        html,
+        body {
+                margin: 0;
+                width: 100%;
+                height: 100%;
+        }
+</style>
+
+```
+
+---
+
+`src\pages\api\transcribe.ts`:
+```
+import type { APIRoute } from 'astro';
+import { Client, handle_file } from '@gradio/client';
+
+export const POST: APIRoute = async ({ request }) => {
+  try {
+    if (!import.meta.env.PUBLIC_HUGGINGFACE_TOKEN) {
+      return new Response(JSON.stringify({ error: 'Hugging Face token not found' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const formData = await request.formData();
+    const audioFile = formData.get('audio') as File;
+
+    if (!audioFile) {
+      return new Response(JSON.stringify({ error: 'No audio file provided' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const audioBlob = new Blob([await audioFile.arrayBuffer()], { type: audioFile.type });
+
+    const app = await Client.connect("hf-audio/whisper-large-v3", {
+      hf_token: import.meta.env.PUBLIC_HUGGINGFACE_TOKEN,
+    });
+
+    const result = await app.predict('/predict', [handle_file(audioBlob), 'transcribe']);
+
+    if (result && result.data && Array.isArray(result.data) && result.data.length > 0) {
+      const transcription = result.data[0];
+      if (typeof transcription === 'string') {
+        return new Response(JSON.stringify({ transcription }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } else {
+        return new Response(JSON.stringify({ error: 'transcription is not a string' }), { status: 500 });
+      }
+    } else {
+      return new Response(JSON.stringify({ error: 'result is invalid' }), { status: 500 });
+    }
+  } catch (error) {
+    let errorMessage = 'Transcription failed';
+    let errorDetails = 'Unknown error';
+
+    if (error instanceof Error) {
+      errorDetails = error.message;
+    } else if (typeof error === 'string') {
+      errorDetails = error;
+    } else if (error && typeof error === 'object' && 'message' in error) {
+        // Check if the object has a 'message' property before accessing it
+        const errObj = error as { message?: unknown }; // Type assertion
+        if (typeof errObj.message === 'string') {
+            errorDetails = errObj.message;
+        }
+
+    }
+
+
+    return new Response(JSON.stringify({ error: errorMessage, details: errorDetails }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+};
+```
+
+---
