@@ -1,27 +1,36 @@
 ---
-import { Icon } from 'astro-icon/components';
+import { Icon } from "astro-icon/components";
+import '@fontsource/amiri';
 ---
 
 <div class="main col">
   <div class="file col">
     <label for="audio-input" style="display: none;">Upload Audio:</label>
-    <input type="file" id="audio-input" accept="audio/*" style="display: none;" />
+    <input
+      type="file"
+      id="audio-input"
+      accept="audio/*"
+      style="display: none;"
+    />
     <md-filled-tonal-button id="file-select-button">
       <Icon slot="icon" name="upload" />
       <span id="file-button-label">Choose File</span>
     </md-filled-tonal-button>
     <div id="file-name-display"></div>
-
   </div>
   <style>
-    .file{
-gap: 0.5em;
+    .file {
+      gap: 0.5em;
     }
   </style>
   <div>
-    <md-outlined-text-field type="text" id="youtube-input" placeholder="Enter YouTube URL">
+    <md-outlined-text-field
+      type="text"
+      id="youtube-input"
+      placeholder="Enter YouTube URL"
+    >
       <Icon name="youtube" slot="trailing-icon" />
-  </md-outlined-text-field>
+    </md-outlined-text-field>
   </div>
   <div>
     <div>
@@ -38,100 +47,131 @@ gap: 0.5em;
       </md-outlined-select>
     </div>
   </div>
-  <md-filled-button raised id="transcribe-button"><Icon slot="icon" name="transcribe" /> Tafrigh</md-filled-button>
+  <md-filled-button raised id="transcribe-button"
+    ><Icon slot="icon" name="transcribe" /> Tafrigh</md-filled-button
+  >
   <div id="transcription-output"></div>
 </div>
 
 <script>
-  import "material/button/filled-button"; // Import filled-button
+  import "material/button/filled-button";
   import "material/button/elevated-button";
   import "material/textfield/outlined-text-field";
   import "material/select/outlined-select";
-  import "material/select/select-option"
+  import "material/select/select-option";
   import "material/button/filled-tonal-button";
-  const audioInput = document.getElementById("audio-input") as HTMLInputElement;
-  const youtubeInput = document.getElementById("youtube-input") as HTMLInputElement;
-  const modelSelect = document.getElementById("model-select") as HTMLSelectElement;
-  const transcribeButton = document.getElementById("transcribe-button") as HTMLButtonElement;
-  const transcriptionOutput = document.getElementById("transcription-output") as HTMLDivElement;
-  const fileSelectButton = document.getElementById("file-select-button") as HTMLButtonElement;
-  const fileNameDisplay = document.getElementById("file-name-display") as HTMLDivElement;
-  const fileButtonLabel = document.getElementById("file-button-label") as HTMLSpanElement;
 
+  import { transcribeAudioFile, transcribeYouTubeUrl } from '../lib/api';
+  import type { TranscribeResult } from '../lib/api';
 
-  // Trigger the hidden file input when the Material button is clicked
-  fileSelectButton.addEventListener("click", () => {
-    audioInput.click(); // Programmatically click the hidden file input
-  });
+  // --- Element Selection & Null Checks ---
+  const audioInput = document.getElementById("audio-input") as HTMLInputElement | null;
+  const youtubeInput = document.getElementById("youtube-input") as HTMLInputElement | null;
+  const modelSelect = document.getElementById("model-select") as HTMLSelectElement | null;
+  const transcribeButton = document.getElementById("transcribe-button") as HTMLButtonElement | null;
+  const transcriptionOutput = document.getElementById("transcription-output") as HTMLDivElement | null;
+  const fileSelectButton = document.getElementById("file-select-button") as HTMLButtonElement | null;
+  const fileNameDisplay = document.getElementById("file-name-display") as HTMLDivElement | null;
+  const fileButtonLabel = document.getElementById("file-button-label") as HTMLSpanElement | null;
 
-  // Update the displayed file name when a file is selected
-  audioInput.addEventListener("change", () => {
-    if (audioInput.files && audioInput.files.length > 0) {
-      fileNameDisplay.textContent = audioInput.files[0].name;
-        fileButtonLabel.textContent = "Change File";
-    } else {
-      fileNameDisplay.textContent = "";
-        fileButtonLabel.textContent = "Choose File";
-    }
-  });
+  // Check if all essential elements are present
+  if (!audioInput || !youtubeInput || !modelSelect || !transcribeButton || !transcriptionOutput || !fileSelectButton || !fileNameDisplay || !fileButtonLabel) {
+      console.error("Initialization failed: One or more UI elements could not be found in the DOM.");
+      if (transcriptionOutput) {
+          transcriptionOutput.textContent = "Error: UI components failed to load correctly.";
+      }
+  } else {
+      // --- Event Listeners ---
 
-  transcribeButton.addEventListener("click", async () => {
-    transcriptionOutput.textContent = "Transcribing...";
-
-    let formData: FormData | null = null;
-    let endpoint = "/api/transcribe";
-    let isYouTube = false;
-    const selectedModel = modelSelect.value; // Get the selected model
-
-    if (audioInput.files && audioInput.files.length > 0) {
-      formData = new FormData();
-      formData.append("audio", audioInput.files[0]);
-      formData.append("model", selectedModel); // Add the model to the form data
-      endpoint = "/api/transcribe";
-    } else if (youtubeInput.value.trim() !== "") {
-      formData = new FormData();
-      formData.append("yt_url", youtubeInput.value.trim());
-      formData.append("model", selectedModel); // Add the model to the form data
-      endpoint = "/api/transcribe-yt";
-      isYouTube = true;
-    } else {
-      transcriptionOutput.textContent = "Please select an audio file or enter a YouTube URL.";
-      return;
-    }
-
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        body: formData,
+      fileSelectButton.addEventListener("click", () => {
+          audioInput.click(); // Trigger hidden file input
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (isYouTube) {
-          if (data.transcription) {
-            transcriptionOutput.innerHTML = `<div>${data.html || ''}</div><div>Transcription: ${data.transcription}</div>`;
+      audioInput.addEventListener("change", () => {
+          // Update file name display and button text
+          if (audioInput.files && audioInput.files.length > 0) {
+              fileNameDisplay.textContent = audioInput.files[0].name;
+              fileButtonLabel.textContent = "Change File";
+              youtubeInput.value = ''; // Clear YouTube input if a file is selected
           } else {
-            transcriptionOutput.textContent = `Error: ${data.error || "Unknown error"}`;
+              fileNameDisplay.textContent = "";
+              fileButtonLabel.textContent = "Choose File";
           }
-        } else {
-          if (data.transcription) {
-            transcriptionOutput.textContent = `Transcription: ${data.transcription}`;
-          } else {
-            transcriptionOutput.textContent = `Error: ${data.error || "Unknown error"}`;
-          }
+      });
+
+       // Clear file input if YouTube URL is typed into
+      youtubeInput.addEventListener('input', () => {
+        if (youtubeInput.value.trim() !== '') {
+            audioInput.value = ''; // Clear the file input
+            fileNameDisplay.textContent = "";
+            fileButtonLabel.textContent = "Choose File";
         }
-      } else {
-        transcriptionOutput.textContent = `Error: ${response.status} - ${response.statusText}`;
-      }
-    } catch (error) {
-      console.error("Error during transcription:", error);
-      transcriptionOutput.textContent = `Error: ${error}`;
-    }
-  });
+      });
+
+      transcribeButton.addEventListener("click", async () => {
+          // Disable button during processing
+          transcribeButton.disabled = true;
+          transcriptionOutput.textContent = "Transcribing..."; // Initial feedback
+
+          const selectedModel = modelSelect.value || 'standard'; // Default to standard
+          let result: TranscribeResult | null = null;
+
+          try {
+              // Determine which API function to call based on input
+              if (audioInput.files && audioInput.files.length > 0) {
+                  const file = audioInput.files[0];
+                  result = await transcribeAudioFile(file, selectedModel);
+              } else if (youtubeInput.value.trim() !== "") {
+                  const url = youtubeInput.value.trim();
+                  result = await transcribeYouTubeUrl(url, selectedModel);
+              } else {
+                  transcriptionOutput.textContent = "Please select an audio file or enter a YouTube URL.";
+                  transcribeButton.disabled = false; // Re-enable button
+                  return; // Stop if no input
+              }
+
+              // Process the result from the API function
+              if (result) {
+                  if (result.success) {
+                      if (result.html !== undefined) { // YouTube result includes HTML
+                          transcriptionOutput.innerHTML = `<div class="yt-result">${result.html}</div><div class="transcription-text"><strong>Transcription:</strong><br/>${result.transcription}</div>`;
+                      } else { // File result only has transcription
+                          transcriptionOutput.innerHTML = `<div class="transcription-text"><strong>Transcription:</strong><br/>${result.transcription}</div>`;
+                      }
+                  } else {
+                      // Display the structured error message
+                      transcriptionOutput.textContent = `Error: ${result.error}${result.details ? ` (Details: ${result.details})` : ''}`;
+                  }
+              } else {
+                   // Should not happen if logic above is correct, but as a fallback
+                   transcriptionOutput.textContent = "An unexpected issue occurred during processing.";
+              }
+
+          } catch (error) {
+              // Catch unexpected errors *during the component's logic execution* itself
+              console.error("Critical error in transcription click handler:", error);
+              transcriptionOutput.textContent = `A critical client-side error occurred. See browser console for details.`;
+          } finally {
+              // Re-enable the button regardless of success or failure
+              transcribeButton.disabled = false;
+          }
+      });
+  } // end of element null check block
 </script>
 
 <style>
-  .main{
-    gap:1em;
+  .main {
+    gap: 1em;
   }
+
+  #transcription-output{
+    font-family: 'Amiri', sans-serif;
+    line-height: 2;
+    direction: rtl;
+  }
+
+  #youtube-input{
+    display: none;
+  }
+
 </style>
