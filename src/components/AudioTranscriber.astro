@@ -1,6 +1,6 @@
 ---
 import { Icon } from "astro-icon/components";
-import '@fontsource/amiri';
+import "@fontsource/amiri";
 ---
 
 <div class="main col">
@@ -12,11 +12,16 @@ import '@fontsource/amiri';
       accept="audio/*"
       style="display: none;"
     />
+    <md-filled-card class="row file-name-display-container">
+      <Icon name="file" />
+      <div id="file-name-display">
+        Belum ada file
+      </div>
+    </md-filled-card>
     <md-filled-tonal-button id="file-select-button">
       <Icon slot="icon" name="upload" />
-      <span id="file-button-label">Choose File</span>
+      <span id="file-button-label">Pilih File</span>
     </md-filled-tonal-button>
-    <div id="file-name-display"></div>
   </div>
   <style>
     .file {
@@ -34,13 +39,13 @@ import '@fontsource/amiri';
   </div>
   <div>
     <div>
-      <md-outlined-select id="model-select" label="Choose Model">
-        <Icon name="rocket1" slot="leading-icon" />
-        <md-select-option selected value="standard">
+      <md-outlined-select id="model-select" label="Pilih Model">
+        <Icon name="rocket" slot="leading-icon" />
+        <md-select-option value="standard">
           <Icon name="rocket1" slot="start" />
-          <div slot="headline">Standard</div>
+          <div slot="headline">Standar</div>
         </md-select-option>
-        <md-select-option value="turbo">
+        <md-select-option selected value="turbo">
           <Icon name="rocket" slot="start" />
           <div slot="headline">Turbo</div>
         </md-select-option>
@@ -50,112 +55,169 @@ import '@fontsource/amiri';
   <md-filled-button raised id="transcribe-button"
     ><Icon slot="icon" name="transcribe" /> Tafrigh</md-filled-button
   >
-  <div id="transcription-output"></div>
+  <div id="transcription-output" class="transcription-container">
+    <!-- Progress indicator, hidden by default -->
+    <md-circular-progress
+      id="progress-indicator"
+      four-color
+      indeterminate
+      aria-label="Transcription in progress"
+      style="display: none; margin: 2em auto;"
+    ></md-circular-progress>
+    <!-- Transcription result will be inserted here -->
+    <div id="transcription-content"></div>
+  </div>
 </div>
 
 <script>
+  // --- Material Web Component Imports ---
   import "material/button/filled-button";
   import "material/button/elevated-button";
   import "material/textfield/outlined-text-field";
   import "material/select/outlined-select";
   import "material/select/select-option";
   import "material/button/filled-tonal-button";
+  import "material/card/filled-card";
+  import "material/progress/circular-progress"; // <-- Import added
 
-  import { transcribeAudioFile, transcribeYouTubeUrl } from '../lib/api';
-  import type { TranscribeResult } from '../lib/api';
+  // --- API Import ---
+  import { transcribeAudioFile, transcribeYouTubeUrl } from "../lib/api";
+  import type { TranscribeResult } from "../lib/api";
 
   // --- Element Selection & Null Checks ---
-  const audioInput = document.getElementById("audio-input") as HTMLInputElement | null;
-  const youtubeInput = document.getElementById("youtube-input") as HTMLInputElement | null;
-  const modelSelect = document.getElementById("model-select") as HTMLSelectElement | null;
-  const transcribeButton = document.getElementById("transcribe-button") as HTMLButtonElement | null;
-  const transcriptionOutput = document.getElementById("transcription-output") as HTMLDivElement | null;
-  const fileSelectButton = document.getElementById("file-select-button") as HTMLButtonElement | null;
-  const fileNameDisplay = document.getElementById("file-name-display") as HTMLDivElement | null;
-  const fileButtonLabel = document.getElementById("file-button-label") as HTMLSpanElement | null;
+  const audioInput = document.getElementById(
+    "audio-input",
+  ) as HTMLInputElement | null;
+  const youtubeInput = document.getElementById(
+    "youtube-input",
+  ) as HTMLInputElement | null;
+  const modelSelect = document.getElementById(
+    "model-select",
+  ) as HTMLSelectElement | null;
+  const transcribeButton = document.getElementById(
+    "transcribe-button",
+  ) as HTMLButtonElement | null;
+  const transcriptionOutput = document.getElementById( // Parent container
+    "transcription-output",
+  ) as HTMLDivElement | null;
+  const progressIndicator = document.getElementById( // Progress indicator
+    "progress-indicator",
+  ) as HTMLElement | null; // Use HTMLElement or specific type if available
+  const transcriptionContent = document.getElementById( // Where text/html goes
+    "transcription-content",
+  ) as HTMLDivElement | null;
+  const fileSelectButton = document.getElementById(
+    "file-select-button",
+  ) as HTMLButtonElement | null;
+  const fileNameDisplay = document.getElementById(
+    "file-name-display",
+  ) as HTMLDivElement | null;
+  const fileButtonLabel = document.getElementById(
+    "file-button-label",
+  ) as HTMLSpanElement | null;
 
   // Check if all essential elements are present
-  if (!audioInput || !youtubeInput || !modelSelect || !transcribeButton || !transcriptionOutput || !fileSelectButton || !fileNameDisplay || !fileButtonLabel) {
-      console.error("Initialization failed: One or more UI elements could not be found in the DOM.");
-      if (transcriptionOutput) {
-          transcriptionOutput.textContent = "Error: UI components failed to load correctly.";
-      }
+  if (
+    !audioInput ||
+    !youtubeInput ||
+    !modelSelect ||
+    !transcribeButton ||
+    !transcriptionOutput ||
+    !progressIndicator ||      // <-- Check added
+    !transcriptionContent ||   // <-- Check added
+    !fileSelectButton ||
+    !fileNameDisplay ||
+    !fileButtonLabel
+  ) {
+    console.error(
+      "Initialization failed: One or more UI elements could not be found in the DOM.",
+    );
+    if (transcriptionContent) {
+      transcriptionContent.textContent =
+        "Error: UI components failed to load correctly.";
+    }
   } else {
-      // --- Event Listeners ---
+    // --- Event Listeners ---
 
-      fileSelectButton.addEventListener("click", () => {
-          audioInput.click(); // Trigger hidden file input
-      });
+    fileSelectButton.addEventListener("click", () => {
+      audioInput.click(); // Trigger hidden file input
+    });
 
-      audioInput.addEventListener("change", () => {
-          // Update file name display and button text
-          if (audioInput.files && audioInput.files.length > 0) {
-              fileNameDisplay.textContent = audioInput.files[0].name;
-              fileButtonLabel.textContent = "Change File";
-              youtubeInput.value = ''; // Clear YouTube input if a file is selected
-          } else {
-              fileNameDisplay.textContent = "";
-              fileButtonLabel.textContent = "Choose File";
-          }
-      });
+    audioInput.addEventListener("change", () => {
+      // Update file name display and button text
+      if (audioInput.files && audioInput.files.length > 0) {
+        fileNameDisplay.textContent = audioInput.files[0].name;
+        fileButtonLabel.textContent = "Ganti File";
+        youtubeInput.value = ""; // Clear YouTube input if a file is selected
+      } else {
+        fileNameDisplay.textContent = "Belum ada file"; // Reset text
+        fileButtonLabel.textContent = "Pilih File"; // Reset text
+      }
+    });
 
-       // Clear file input if YouTube URL is typed into
-      youtubeInput.addEventListener('input', () => {
-        if (youtubeInput.value.trim() !== '') {
-            audioInput.value = ''; // Clear the file input
-            fileNameDisplay.textContent = "";
-            fileButtonLabel.textContent = "Choose File";
+    // Clear file input if YouTube URL is typed into
+    youtubeInput.addEventListener("input", () => {
+      if (youtubeInput.value.trim() !== "") {
+        audioInput.value = ""; // Clear the file input
+        fileNameDisplay.textContent = "Belum ada file"; // Reset text
+        fileButtonLabel.textContent = "Pilih File"; // Reset text
+      }
+    });
+
+    transcribeButton.addEventListener("click", async () => {
+      // --- Start Transcription Process ---
+      transcribeButton.disabled = true;
+      transcriptionContent.innerHTML = "";      // Clear previous results
+      progressIndicator.style.display = "block"; // Show progress indicator
+
+      const selectedModel = modelSelect.value || "standard"; // Default to standard
+      let result: TranscribeResult | null = null;
+
+      try {
+        // Determine which API function to call based on input
+        if (audioInput.files && audioInput.files.length > 0) {
+          const file = audioInput.files[0];
+          result = await transcribeAudioFile(file, selectedModel);
+        } else if (youtubeInput.value.trim() !== "") {
+          const url = youtubeInput.value.trim();
+          result = await transcribeYouTubeUrl(url, selectedModel);
+        } else {
+           // No input provided - display message in the content area
+          transcriptionContent.textContent =
+            "Harap pilih file audio atau masukkan URL YouTube.";
+          // No need to re-enable button here, finally block handles it
+          return; // Stop if no input
         }
-      });
 
-      transcribeButton.addEventListener("click", async () => {
-          // Disable button during processing
-          transcribeButton.disabled = true;
-          transcriptionOutput.textContent = "Transcribing..."; // Initial feedback
-
-          const selectedModel = modelSelect.value || 'standard'; // Default to standard
-          let result: TranscribeResult | null = null;
-
-          try {
-              // Determine which API function to call based on input
-              if (audioInput.files && audioInput.files.length > 0) {
-                  const file = audioInput.files[0];
-                  result = await transcribeAudioFile(file, selectedModel);
-              } else if (youtubeInput.value.trim() !== "") {
-                  const url = youtubeInput.value.trim();
-                  result = await transcribeYouTubeUrl(url, selectedModel);
-              } else {
-                  transcriptionOutput.textContent = "Please select an audio file or enter a YouTube URL.";
-                  transcribeButton.disabled = false; // Re-enable button
-                  return; // Stop if no input
-              }
-
-              // Process the result from the API function
-              if (result) {
-                  if (result.success) {
-                      if (result.html !== undefined) { // YouTube result includes HTML
-                          transcriptionOutput.innerHTML = `<div class="yt-result">${result.html}</div><div class="transcription-text"><strong>Transcription:</strong><br/>${result.transcription}</div>`;
-                      } else { // File result only has transcription
-                          transcriptionOutput.innerHTML = `<div class="transcription-text"><strong>Transcription:</strong><br/>${result.transcription}</div>`;
-                      }
-                  } else {
-                      // Display the structured error message
-                      transcriptionOutput.textContent = `Error: ${result.error}${result.details ? ` (Details: ${result.details})` : ''}`;
-                  }
-              } else {
-                   // Should not happen if logic above is correct, but as a fallback
-                   transcriptionOutput.textContent = "An unexpected issue occurred during processing.";
-              }
-
-          } catch (error) {
-              // Catch unexpected errors *during the component's logic execution* itself
-              console.error("Critical error in transcription click handler:", error);
-              transcriptionOutput.textContent = `A critical client-side error occurred. See browser console for details.`;
-          } finally {
-              // Re-enable the button regardless of success or failure
-              transcribeButton.disabled = false;
+        // --- Process the API Result ---
+        if (result) {
+          if (result.success) {
+            if (result.html !== undefined) {
+              // YouTube result includes HTML
+              transcriptionContent.innerHTML = `<div class="yt-result">${result.html}</div><div class="transcription-text">${result.transcription}</div>`;
+            } else {
+              // File result only has transcription
+              transcriptionContent.innerHTML = `<div class="transcription-text">${result.transcription}</div>`;
+            }
+          } else {
+            // Display the structured error message
+            transcriptionContent.textContent = `Kesalahan: ${result.error}${result.details ? ` (Detail: ${result.details})` : ""}`;
           }
-      });
+        } else {
+          // Fallback for unexpected null result
+          transcriptionContent.textContent =
+            "Terjadi masalah tak terduga selama pemrosesan.";
+        }
+      } catch (error) {
+        // Catch unexpected errors *during the component's logic execution*
+        console.error("Critical error in transcription click handler:", error);
+        transcriptionContent.textContent = `Terjadi kesalahan kritis di sisi klien. Lihat konsol browser untuk detail.`;
+      } finally {
+        // --- Finish Transcription Process ---
+        progressIndicator.style.display = "none"; // Hide progress indicator
+        transcribeButton.disabled = false;        // Re-enable the button
+      }
+    });
   } // end of element null check block
 </script>
 
@@ -164,14 +226,44 @@ import '@fontsource/amiri';
     gap: 1em;
   }
 
-  #transcription-output{
-    font-family: 'Amiri', sans-serif;
+  /* Style the container for output and progress */
+  .transcription-container {
+    min-height: 60px; /* Give it some minimum height */
+    position: relative; /* Needed if you want absolute positioning inside */
+    text-align: center; /* Center the progress indicator */
+  }
+
+  /* Style the actual content area */
+  #transcription-content {
+     /* Reset text align if needed for content */
+    text-align: right; /* Assuming RTL content */
+    font-family: "Amiri", sans-serif;
     line-height: 2;
     direction: rtl;
   }
 
-  #youtube-input{
-    display: none;
+
+  #youtube-input {
+    display: none; /* Hide YouTube input for now */
+  }
+  .file-name-display-container {
+    padding: 1em;
+    gap:0.5em;
+    align-items: center; /* Vertically align icon and text */
+  }
+
+  /* Ensure icon size is controlled if needed */
+  .file-name-display-container svg {
+    width: 24px; /* Example size */
+    height: 24px; /* Example size */
+  }
+
+  /* Explicitly style the text inside the card */
+  #file-name-display {
+    flex-grow: 1; /* Allow text to take available space */
+    overflow: hidden; /* Prevent long names from breaking layout */
+    text-overflow: ellipsis; /* Show ... for long names */
+    white-space: nowrap; /* Keep filename on one line */
   }
 
 </style>
